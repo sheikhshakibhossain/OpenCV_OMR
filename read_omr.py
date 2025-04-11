@@ -59,6 +59,46 @@ def grab_contours(cnts):
     else:
         return cnts
 
+def visualize_omr_regions(image, thresh, reg_no_region, answers_region):
+    """Visualize the OMR sheet with detected regions highlighted"""
+    # Create a color version of the thresholded image
+    thresh_color = cv2.cvtColor(thresh, cv2.COLOR_GRAY2BGR)
+    
+    # Get the dimensions of the regions
+    reg_h, reg_w = reg_no_region.shape
+    ans_h, ans_w = answers_region.shape
+    
+    # Calculate the positions of the regions in the original image
+    # These should match the coordinates used in process_omr_sheet
+    height, width = thresh.shape
+    
+    reg_y1 = int(height*0.179)
+    reg_y2 = int(height*0.39)
+    reg_x1 = int(width*0.01)
+    reg_x2 = int(width*0.264)
+    
+    ans_y1 = int(height*0.67)
+    ans_y2 = int(height*0.94)
+    ans_x1 = int(width*0.001)
+    ans_x2 = int(width*0.9999)
+    
+    # Draw rectangles around the regions
+    cv2.rectangle(thresh_color, (reg_x1, reg_y1), (reg_x2, reg_y2), (0, 255, 0), 2)
+    cv2.rectangle(thresh_color, (ans_x1, ans_y1), (ans_x2, ans_y2), (255, 0, 0), 2)
+    
+    # Add labels
+    cv2.putText(thresh_color, "Registration Number", (reg_x1, reg_y1-10), 
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+    cv2.putText(thresh_color, "Answers", (ans_x1, ans_y1-10), 
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+    
+    # Display the visualization
+    plt.figure(figsize=(15, 15))
+    plt.imshow(cv2.cvtColor(thresh_color, cv2.COLOR_BGR2RGB))
+    plt.title("OMR Sheet with Detected Regions")
+    plt.axis('off')
+    plt.show()
+
 def process_omr_sheet(image_path):
     """Process an OMR sheet image and extract registration number and answers"""
     # Step 1: Load the image, make a copy for visualization, and convert to grayscale
@@ -119,8 +159,11 @@ def process_omr_sheet(image_path):
     # Define registration number region | adjust
     reg_no_region = thresh[int(height*0.179):int(height*0.39), int(width*0.01):int(width*0.264)]
     
-    # Define answers region | adjust
-    answers_region = thresh[int(height*0.675):int(height*0.95), int(width*0.0):int(width*0.99)]
+    # Define answers region | adjust - reverting to previous values
+    answers_region = thresh[int(height*0.67):int(height*0.94), int(width*0.001):int(width*0.9999)]
+    
+    # Visualize the regions on the OMR sheet
+    visualize_omr_regions(thresh, thresh, reg_no_region, answers_region)
     
     # Display these regions for verification
     plt.figure(figsize=(15, 5))
@@ -205,6 +248,9 @@ def extract_answers(answers_region):
     # First, let's identify the four sections (blocks of questions)
     section_width = w // 4
     
+    # Create a debug visualization
+    debug_viz = cv2.cvtColor(answers_region, cv2.COLOR_GRAY2BGR)
+    
     answers = {}
     question_number = 1
     
@@ -240,17 +286,45 @@ def extract_answers(answers_region):
                 bubble = question_row[:, option_start:option_end]
                 pixel_count = cv2.countNonZero(bubble)
                 
+                # Draw rectangle around the bubble for debugging
+                abs_option_start = section_x_start + option_start
+                abs_option_end = section_x_start + option_end
+                cv2.rectangle(debug_viz, 
+                             (abs_option_start, row_start), 
+                             (abs_option_end, row_end), 
+                             (0, 255, 0), 1)
+                
+                # Print pixel count for debugging
+                threshold = row_height * option_width * 0.1  # Lower threshold to 10%
+                print(f"Q{question_number} Option {chr(65+option)}: {pixel_count} pixels (threshold: {threshold})")
+                
                 if pixel_count > max_pixel_count:
                     max_pixel_count = pixel_count
                     selected_option = chr(65 + option)  # Convert to A, B, C, D
             
             # Add to answers dictionary if we found a marked bubble
-            if max_pixel_count > (row_height * option_width * 0.325):
+            threshold = row_height * option_width * 0.1  # Lower threshold to 10%
+            if max_pixel_count > threshold:
                 answers[question_number] = selected_option
+                # Mark the selected option with a thicker rectangle
+                option_idx = ord(selected_option) - ord('A')
+                abs_option_start = section_x_start + (option_idx + 1) * option_width
+                abs_option_end = section_x_start + (option_idx + 2) * option_width
+                cv2.rectangle(debug_viz, 
+                             (abs_option_start, row_start), 
+                             (abs_option_end, row_end), 
+                             (0, 0, 255), 2)
             else:
                 answers[question_number] = None  # No bubble marked for this question
             
             question_number += 1
+    
+    # Display the debug visualization
+    plt.figure(figsize=(15, 15))
+    plt.imshow(cv2.cvtColor(debug_viz, cv2.COLOR_BGR2RGB))
+    plt.title("Answer Region with Detected Bubbles")
+    plt.axis('off')
+    plt.show()
     
     return answers
 

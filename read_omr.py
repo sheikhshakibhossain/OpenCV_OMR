@@ -183,7 +183,7 @@ def extract_registration_number(reg_no_region):
                 selected_digit = digit
         
         # Only add digit if we found a marked bubble (threshold can be adjusted)
-        if max_pixel_count > (row_height * col_width * 0.3):
+        if max_pixel_count > (row_height * col_width * 0.4): #0.4 working good for me
             reg_no += str(selected_digit)
         else:
             reg_no += "_"  # No bubble marked for this column
@@ -245,7 +245,7 @@ def extract_answers(answers_region):
                     selected_option = chr(65 + option)  # Convert to A, B, C, D
             
             # Add to answers dictionary if we found a marked bubble
-            if max_pixel_count > (row_height * option_width * 0.3):
+            if max_pixel_count > (row_height * option_width * 0.325):
                 answers[question_number] = selected_option
             else:
                 answers[question_number] = None  # No bubble marked for this question
